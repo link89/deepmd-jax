@@ -82,7 +82,24 @@ def get_idx_mask_fn(type_count):
         Returned idx_mask_fn that filters out ghost atoms from nbrs.idx.
     '''
     full_mask = get_mask_by_device(type_count)
-    idx_mask_out = np.arange(len(full_mask))[~np.array(full_mask)]
+    # Compute idx_mask_out (indices of ghost atoms) without materializing sharded array
+    K = jax.device_count()
+    type_count_each = -(-np.array(type_count)//K)  # type_count for each device after padding
+    # Build list of ghost atom indices for each type
+    ghost_indices = []
+    offset = 0
+    for count, count_each in zip(type_count, type_count_each):
+        # Real atoms: offset to offset + count
+        # Ghost atoms: offset + count to offset + count_each * K
+        type_atoms = count_each * K
+        real_atoms_end = offset + count
+        ghost_start = real_atoms_end
+        ghost_end = offset + type_atoms
+        if ghost_end > ghost_start:
+            ghost_indices.append(np.arange(ghost_start, ghost_end))
+        offset += type_atoms
+    idx_mask_out = np.concatenate(ghost_indices) if ghost_indices else np.array([], dtype=int)
+    
     def idx_mask_fn(idx):
         idx = jax.lax.with_sharding_constraint(idx, PSpec('atom'))
         filter = full_mask[:,None] * jnp.isin(idx, idx_mask_out, invert=True)
