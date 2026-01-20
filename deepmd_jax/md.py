@@ -98,8 +98,7 @@ def get_idx_mask_fn(type_count):
         if ghost_end > ghost_start:
             ghost_indices.append(np.arange(ghost_start, ghost_end))
         offset += type_atoms
-    idx_mask_out = np.concatenate(ghost_indices) if ghost_indices else np.array([], dtype=int)
-    
+    idx_mask_out = np.concatenate(ghost_indices) if ghost_indices else np.array([], dtype=np.intp)
     def idx_mask_fn(idx):
         idx = jax.lax.with_sharding_constraint(idx, PSpec('atom'))
         filter = full_mask[:,None] * jnp.isin(idx, idx_mask_out, invert=True)
